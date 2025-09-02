@@ -1,15 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import type { CSSProperties } from "react";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 export default function App() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: "system", content: "You are a helpful, concise assistant." },
+  ]);
 
   // Scroll to bottom when messages update
   useEffect(() => {
@@ -21,17 +20,19 @@ export default function App() {
   // Send message
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
+    const text = input.trim();
+    if (!text || loading) return;
 
-    const newMessage: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, newMessage]);
+    const next = [... messages, { role: "user", content: text }];
+    setMessages(next);
     setInput("");
+    setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ messages: next }),
       });
 
       if (!res.ok) throw new Error("Failed to fetch");
@@ -45,6 +46,8 @@ export default function App() {
         ...prev,
         { role: "assistant", content: `Sorry, I hit an error: ${errorMessage}` },
       ]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -116,7 +119,7 @@ const styles: Record<string, CSSProperties> = {
   },
   inputContainer: {
     display: "flex",
-    borderTop: "1px solid #ccc",
+    borderTop: "1px solid #620e0eff",
     padding: 8,
     background: "#fff",
   },
