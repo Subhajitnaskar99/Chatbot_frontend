@@ -1,159 +1,138 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import type { CSSProperties } from "react";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+interface Message {
+  role: "user" | "assistant";
+  content: string;
+}
 
 export default function App() {
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([
-    { role: "system", content: "You are a helpful, concise assistant." },
-  ]);
-  const [loading, setLoading] = useState(false);
-  const bottomRef = useRef(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
 
+  // Scroll to bottom when messages update
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
-  const sendMessage = async (e) => {
+  // Send message
+  const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    const text = input.trim();
-    if (!text || loading) return;
+    if (!input.trim()) return;
 
-    const next = [...messages, { role: "user", content: text }];
-    setMessages(next);
+    const newMessage: Message = { role: "user", content: input };
+    setMessages((prev) => [...prev, newMessage]);
     setInput("");
-    setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/chat/`, {
+      const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ message: input }),
       });
-      if (!res.ok) {
-        const errTxt = await res.text();
-        throw new Error(errTxt || `HTTP ${res.status}`);
-      }
+
+      if (!res.ok) throw new Error("Failed to fetch");
+
       const data = await res.json();
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
-    } catch (err) {
+    } catch (err: unknown) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Something went wrong";
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: `Sorry, I hit an error: ${err.message}` },
+        { role: "assistant", content: `Sorry, I hit an error: ${errorMessage}` },
       ]);
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <div style={styles.app}>
-      <div style={styles.chat}>
-        <header style={styles.header}>💬 Generative Chatbot</header>
-
-        <div style={styles.messages}>
-          {messages
-            .filter((m) => m.role !== "system")
-            .map((m, i) => (
-              <div
-                key={i}
-                style={{
-                  ...styles.msg,
-                  ...(m.role === "user" ? styles.user : styles.assistant),
-                }}
-              >
-                <strong>{m.role === "user" ? "You" : "Assistant"}:</strong>{" "}
-                <span>{m.content}</span>
-              </div>
-            ))}
-          <div ref={bottomRef} />
-        </div>
-
-        <form onSubmit={sendMessage} style={styles.form}>
-          <input
-            style={styles.input}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type a message…"
-          />
-          <button style={styles.button} disabled={loading}>
-            {loading ? "Thinking…" : "Send"}
-          </button>
-        </form>
+    <div style={styles.chat}>
+      <div style={styles.messages}>
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            style={m.role === "user" ? styles.userMessage : styles.assistantMessage}
+          >
+            <strong>{m.role === "user" ? "You" : "Bot"}:</strong> {m.content}
+          </div>
+        ))}
+        <div ref={bottomRef} />
       </div>
+
+      <form onSubmit={sendMessage} style={styles.inputContainer}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          style={styles.input}
+          placeholder="Type a message..."
+        />
+        <button type="submit" style={styles.button}>
+          Send
+        </button>
+      </form>
     </div>
   );
 }
 
-const styles = {
-  app: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    background: "#0f172a",
-    color: "#e2e8f0",
-    padding: 16,
-  },
+const styles: Record<string, CSSProperties> = {
   chat: {
     width: "100%",
-    maxWidth: 720,
-    background: "#111827",
-    borderRadius: 12,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+    maxWidth: 600,
+    margin: "0 auto",
+    height: "100vh",
+    background: "#f5f5f5",
+    borderRadius: 8,
+    boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
   },
-  header: {
-    padding: "16px 20px",
-    borderBottom: "1px solid #1f2937",
-    fontWeight: 600,
-  },
   messages: {
-    padding: 20,
+    padding: 16,
     display: "flex",
     flexDirection: "column",
-    gap: 12,
-    minHeight: 300,
-    maxHeight: "60vh",
+    gap: 8,
+    flex: 1,
     overflowY: "auto",
   },
-  msg: {
-    padding: "12px 14px",
-    borderRadius: 10,
-    lineHeight: 1.4,
-    whiteSpace: "pre-wrap",
-  },
-  user: {
+  userMessage: {
     alignSelf: "flex-end",
-    background: "#1f2937",
+    background: "#007bff",
+    color: "#fff",
+    padding: "8px 12px",
+    borderRadius: 12,
+    maxWidth: "80%",
   },
-  assistant: {
+  assistantMessage: {
     alignSelf: "flex-start",
-    background: "#0b2b4a",
+    background: "#e4e6eb",
+    padding: "8px 12px",
+    borderRadius: 12,
+    maxWidth: "80%",
   },
-  form: {
+  inputContainer: {
     display: "flex",
-    gap: 8,
-    padding: 12,
-    borderTop: "1px solid #1f2937",
-    background: "#0b1220",
+    borderTop: "1px solid #ccc",
+    padding: 8,
+    background: "#fff",
   },
   input: {
     flex: 1,
-    padding: "12px 14px",
-    borderRadius: 8,
-    border: "1px solid #1f2937",
-    background: "#0f172a",
-    color: "#e2e8f0",
-    outline: "none",
+    padding: 8,
+    borderRadius: 6,
+    border: "1px solid #ccc",
+    marginRight: 8,
   },
   button: {
-    padding: "12px 16px",
-    borderRadius: 8,
-    border: "1px solid #1f2937",
-    background: "#1d4ed8",
-    color: "white",
+    padding: "8px 16px",
+    borderRadius: 6,
+    border: "none",
+    background: "#007bff",
+    color: "#fff",
     cursor: "pointer",
   },
 };
